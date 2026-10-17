@@ -1,0 +1,42 @@
+@page
+@model AdminModel
+@{ ViewData["Title"] = "管理中心"; }
+<div class="section-head"><div><div class="eyebrow">ADMIN / @Model.ModuleLabel</div><h1>管理中心</h1><p class="lede">账号、权限和供应商映射由管理员维护。</p></div><div class="head-meta">管理员视图</div></div>
+@if (!string.IsNullOrWhiteSpace(Model.Message)) { <div class="notice success-note">@Model.Message</div> }
+<div class="admin-grid">
+<section class="admin-section">
+    <div class="section-title"><div><span class="rail-label">01 · ACCOUNTS</span><h2>工具账号</h2></div></div>
+    <form method="post" asp-page-handler="CreateUser" class="inline-form">
+        <input asp-for="NewUsername" placeholder="新账号" /><input asp-for="NewDisplayName" placeholder="显示名称" /><input asp-for="NewPassword" placeholder="初始密码（至少 12 位）" type="password" />
+        @if (Model.IsDss) { <select asp-for="NewProjectId"><option value="">绑定 DSS 项目</option>@foreach (var project in Model.Projects) { <option value="@project.Id">@project.Code · @project.DisplayName</option> }</select> }
+        <button class="secondary-button" type="submit">新增账号</button>
+    </form>
+    <div class="admin-list">
+    @foreach (var user in Model.Users) {
+        <div class="admin-row"><div><strong>@user.Username</strong><small>@user.DisplayName · @(user.Active ? "已激活" : "已吊销") @if (Model.IsDss) { <span>· @(user.DssProject?.Code ?? "未绑定项目")</span> }</small></div>
+            @if (Model.IsDss && user.Role == UserRole.User) { <form method="post" asp-page-handler="ChangeProject" class="project-change"><input type="hidden" name="id" value="@user.Id" /><select name="projectId">@foreach (var project in Model.Projects) { <option value="@project.Id" selected="@(project.Id == user.DssProjectId)">@project.Code</option> }</select><button class="text-button" type="submit">变更项目</button></form> }
+            <form method="post" asp-page-handler="ToggleUser"><input type="hidden" name="id" value="@user.Id" /><button class="text-button" type="submit">@(user.Active ? "吊销" : "激活")</button></form>
+            <form method="post" asp-page-handler="ResetPassword"><input type="hidden" name="id" value="@user.Id" /><button class="text-button" type="submit">重置密码</button></form>
+        </div>
+    }
+    </div>
+</section>
+<section class="admin-section">
+    <div class="section-title"><div><span class="rail-label">02 · CONFIGURATION</span><h2>@(Model.IsDss ? "项目与密钥" : "三级证书模板")</h2></div></div>
+    @if (!Model.IsDss) {
+        <form method="post" asp-page-handler="CreateTemplate" class="inline-form"><input asp-for="TemplateName" placeholder="模板显示名称" /><input asp-for="CertProfile" placeholder="供应商 cert_profile" /><select asp-for="TemplateEnvironment"><option value="development">开发</option><option value="production">量产</option></select><input asp-for="TemplateCertType" placeholder="CertType，例如 diagUser" /><input asp-for="TemplateTrustGrade" placeholder="TrustGrade，例如 dev / field" /><input asp-for="TemplateDiagUserRole" placeholder="DiagUserRole 位掩码，例如 80" /><label class="check"><input asp-for="TemplateRequiresUnique" /> Claims 必填 Unique ID</label><button class="secondary-button" type="submit">新增模板</button></form>
+        <div class="admin-list">@foreach (var t in Model.Templates) { <div class="admin-row"><div><strong>@t.DisplayName</strong><small>@t.CertProfile · @t.EnvironmentName · @t.CertType / @t.TrustGrade / 0x@t.DiagUserRole · @(t.RequiresEcuUniqueId ? "Unique ID 必填" : "Unique ID 可选")</small></div><span class="status-text">@(t.Active ? "启用" : "停用")</span></div> }</div>
+    } else {
+        <form method="post" asp-page-handler="CreateProject" class="inline-form"><input asp-for="ProjectCode" placeholder="项目代号" /><input asp-for="ProjectName" placeholder="项目显示名称" /><button class="secondary-button" type="submit">新增项目</button></form>
+        <form method="post" asp-page-handler="CreateKey" class="inline-form"><select asp-for="KeyProjectId"><option value="">所属项目</option>@foreach (var project in Model.Projects) { <option value="@project.Id">@project.Code</option> }</select><input asp-for="KeyName" placeholder="供应商密钥名称" /><input asp-for="KeyAlgorithm" placeholder="签名算法" /><button class="secondary-button" type="submit">新增密钥</button></form>
+        <div class="admin-list">
+        @foreach (var project in Model.Projects) {
+            <div class="project-config"><div class="admin-row project-row"><div><strong>@project.Code · @project.DisplayName</strong><small>@(string.IsNullOrWhiteSpace(project.BaseUrl) ? "接口地址未配置" : project.BaseUrl)</small></div><span class="status-text">@project.Keys.Count 个密钥</span></div>
+                <form method="post" asp-page-handler="UpdateProject" class="inline-form compact"><input type="hidden" name="id" value="@project.Id" /><input name="baseUrl" value="@project.BaseUrl" placeholder="供应商 HTTPS 地址" /><input name="appKey" value="@project.AppKey" placeholder="appKey" /><input name="appSecret" type="password" placeholder="留空保留 appSecret" /><input name="certificatePath" value="@project.ClientCertificatePath" placeholder="mTLS 客户端证书路径" /><input name="certificatePassword" type="password" placeholder="留空保留证书密码" /><button class="text-button" type="submit">保存项目配置</button></form>
+                @foreach (var key in project.Keys) { <div class="admin-row nested"><div><strong>@key.Name</strong><small>@key.SignAlgorithm · @project.Code</small></div></div> }
+            </div>
+        }
+        </div>
+    }
+</section>
+</div>

@@ -1,0 +1,6 @@
+@page
+@model HistoryModel
+@{ ViewData["Title"] = "操作记录"; }
+<div class="section-head"><div><div class="eyebrow">AUDIT TRAIL / 365 DAYS</div><h1>操作记录</h1><p class="lede">@(Model.IsAdmin ? "管理员视图：查看本工具全部申请与签名记录。" : "你的历史操作只对你自己可见。")</p></div><div class="head-meta">保留至 @DateTime.UtcNow.AddYears(1).ToLocalTime().ToString("yyyy-MM-dd")</div></div>
+<div class="history-tabs"><span class="active">全部操作</span><span>@Model.Items.Count 条记录</span></div>
+<div class="record-table"><div class="record-row record-header"><span>时间</span><span>类型</span><span>输入 / 模板</span><span>结果</span><span>操作者</span></div>@if (Model.Items.Count == 0) { <div class="empty-row">暂无记录</div> } @foreach (var item in Model.Items) { <div class="record-row"><span class="mono">@item.When.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span><span><b class="record-kind @item.Kind.ToLowerInvariant()">@item.Kind</b></span><span><strong>@item.Subject</strong><small>@item.Detail</small></span><span class="@(item.Success ? "result-ok" : "result-fail")">@(item.Success ? "成功" : "失败")</span><span>@item.User</span></div> }</div>

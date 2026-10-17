@@ -1,0 +1,21 @@
+@page
+@model PkiIndexModel
+@{ ViewData["Title"] = "PKI 证书"; }
+<div class="section-head"><div><div class="eyebrow">PKI / CERTIFICATE REQUEST</div><h1>申请三级证书</h1><p class="lede">选择已配置模板，填写 ECU 标识，提交后直接获得供应商签发结果。</p></div><div class="head-meta"><span class="status-dot"></span>@(Model.IsDemoMode ? "演示模式 · 不调用供应商" : "供应商接口模式")</div></div>
+<div class="workspace-grid">
+    <form method="post" enctype="multipart/form-data" class="form-panel workspace-form">
+        <div asp-validation-summary="ModelOnly" class="validation"></div>
+        <div class="step-label"><span>01</span>证书模板</div>
+        <label asp-for="TemplateId">三级证书模板</label><select asp-for="TemplateId"><option value="">选择证书模板</option>@foreach (var item in Model.Templates) { <option value="@item.Id">@item.DisplayName · @item.EnvironmentName</option> }</select>
+        <div class="field-grid"><div><label asp-for="EcuVariantId">ECU Variant ID</label><input asp-for="EcuVariantId" placeholder="例如 0040000100000000" /><small>十六进制，最多 16 字节</small></div><div><label asp-for="EcuUniqueId">ECU Unique ID <span class="optional">可选 / Claims 必填</span></label><input asp-for="EcuUniqueId" placeholder="按证书规范填写" /><small>UTF-8 编码最多 32 字节</small></div></div>
+        <div class="step-label"><span>02</span>证书请求</div>
+        <div class="mode-switch"><label><input type="radio" asp-for="CsrMode" value="generate" checked />工具生成 CSR</label><label><input type="radio" asp-for="CsrMode" value="upload" />上传已有 CSR</label></div>
+        <div id="generate-fields"><label asp-for="CommonName">CSR Common Name</label><input asp-for="CommonName" placeholder="例如 ECU-001 或 UUID" /><small>工具会生成 Ed25519 密钥对、CSR 和可下载的私钥。</small></div>
+        <div id="upload-fields" hidden><label asp-for="CsrFile">CSR 文件</label><input asp-for="CsrFile" type="file" accept=".csr,.pem,.txt" /><small>仅上传公钥证书请求，不要上传私钥。</small></div>
+        <button class="primary-button" type="submit">提交申请 <span>→</span></button>
+    </form>
+    <aside class="side-rail"><div class="rail-card"><span class="rail-label">当前规则</span><h3>字段由证书规范约束</h3><p>工具只展示管理员已启用的三级模板；CertType、TrustGrade、角色和 OID 由模板映射处理。</p></div><div class="rail-card quiet"><span class="rail-label">留存说明</span><p>申请结果、CSR 摘要和请求 ID 保存一年。私钥只在生成后下载，不写入服务器记录。</p></div></aside>
+</div>
+@if (Model.Result is not null) { <section class="result-panel @(Model.Result.Success ? "success" : "failure")"><div class="result-title">@(Model.Result.Success ? "证书申请已完成" : "申请未完成")</div><p>@(Model.Result.Success ? $"请求 ID：{Model.Result.RequestId}" : Model.Result.Error)</p>@if (Model.Result.Success) { <textarea id="certificate-result" readonly>@Model.Result.Certificate</textarea><button class="secondary-button" type="button" onclick="downloadText('certificate-result','certificate.pem')">下载证书</button> }</section> }
+@if (Model.GeneratedPrivateKey is not null) { <section class="result-panel success"><div class="result-title">CSR 已生成</div><p>请先下载私钥，再提交 CSR。私钥离开此页面后无法恢复。</p><textarea id="private-key-result" readonly>@Model.GeneratedPrivateKey</textarea><button class="secondary-button" type="button" onclick="downloadText('private-key-result','private-key.pem')">下载 PKCS#8 私钥</button><textarea id="generated-csr" hidden>@Model.GeneratedCsr</textarea></section> }
+@section Scripts { <script>document.querySelectorAll('input[name="CsrMode"]').forEach(x => x.addEventListener('change', () => { const upload = document.querySelector('#upload-fields'); const generate = document.querySelector('#generate-fields'); const isUpload = document.querySelector('input[name="CsrMode"]:checked').value === 'upload'; upload.hidden = !isUpload; generate.hidden = isUpload; })); function downloadText(id, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([document.getElementById(id).value], {type:'text/plain'})); a.download = name; a.click(); URL.revokeObjectURL(a.href); }</script> }

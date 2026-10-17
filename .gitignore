@@ -1,0 +1,24 @@
+# Local runtime state and secrets
+app/zf-tools.db
+app/zf-tools.db-*
+app/.keyring/
+app/*.pfx
+app/*.p12
+app/*.pem
+
+# .NET build output
+**/bin/
+**/obj/
+
+# Local tooling and extracted source material
+.playwright-cli/
+work/
+outputs/
+
+# IDE and OS files
+.vs/
+.vscode/
+*.user
+*.suo
+Thumbs.db
+Desktop.ini

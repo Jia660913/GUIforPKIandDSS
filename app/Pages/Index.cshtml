@@ -1,0 +1,15 @@
+@page
+@model IndexModel
+@{ ViewData["Title"] = "选择工具"; }
+<section class="landing-grid">
+    <div class="intro-block">
+        <div class="eyebrow">ENGINEERING TOOL DESK</div>
+        <h1>把复杂的供应商系统，<br /><em>变成清晰的工程动作。</em></h1>
+        <p class="lede">独立账号、项目边界和完整记录。选择你今天要使用的工具。</p>
+        <div class="trust-row"><span class="status-dot"></span><span>本地安全工作区</span><span class="dot-divider">·</span><span>供应商接口凭据仅在服务端使用</span></div>
+    </div>
+    <div class="tool-selector">
+        <a class="tool-card pki" asp-page="/Login" asp-route-module="Pki"><div class="tool-icon">PKI</div><div><span class="tool-kicker">CERTIFICATE SERVICE</span><h2>PKI 证书工具</h2><p>申请三级诊断证书，生成或上传 CSR，选择开发与量产环境。</p><span class="card-action">进入 PKI <span>↗</span></span></div></a>
+        <a class="tool-card dss" asp-page="/Login" asp-route-module="Dss"><div class="tool-icon">DSS</div><div><span class="tool-kicker">SIGNING SERVICE</span><h2>DSS 签名工具</h2><p>按项目选择密钥，为摘要或字符串生成独立签名值。</p><span class="card-action">进入 DSS <span>↗</span></span></div></a>
+    </div>
+</section>
