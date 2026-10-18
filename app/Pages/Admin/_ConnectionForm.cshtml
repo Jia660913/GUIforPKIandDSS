@@ -1,0 +1,34 @@
+@model ConnectionEditor
+@{ var input = Model.Input; var prefix = $"connection-{input.Id}"; }
+<form method="post" asp-page-handler="SaveConnection" class="inline-form compact">
+    <input type="hidden" name="ConnectionInput.Id" value="@input.Id" />
+    <div><label for="@prefix-name">Connection name</label><input id="@prefix-name" name="ConnectionInput.Name" value="@input.Name" maxlength="160" required /></div>
+    <div><label for="@prefix-env">Environment</label><select id="@prefix-env" name="ConnectionInput.EnvironmentName"><option value="development" selected="@(input.EnvironmentName == "development")">Development@(Model.Page.IsDss ? "" : " / dev")</option><option value="production" selected="@(input.EnvironmentName == "production")">Production@(Model.Page.IsDss ? "" : " / field")</option></select></div>
+    @if (Model.Page.IsDss)
+    {
+        <div><label for="@prefix-project">Project</label><select id="@prefix-project" name="ConnectionInput.DssProjectId" required><option value="">Select a project</option>@foreach (var project in Model.Page.Projects) { <option value="@project.Id" selected="@(input.DssProjectId == project.Id)">@project.Code@(project.Active ? "" : " · disabled")</option> }</select></div>
+    }
+    <div class="config-wide"><label for="@prefix-url">Supplier HTTPS origin</label><input id="@prefix-url" name="ConnectionInput.BaseUrl" value="@input.BaseUrl" placeholder="@(Model.Page.IsDss ? "https://zf.easysec.com.cn:18100" : "https://zf.easysec.com.cn:10001")" type="url" maxlength="2048" /></div>
+    <div><label for="@prefix-certificate">Client certificate path (PEM or PFX)</label><input id="@prefix-certificate" name="ConnectionInput.ClientCertificatePath" value="@input.ClientCertificatePath" maxlength="2048" autocomplete="off" /></div>
+    <div><label for="@prefix-private-key">Client private-key path (PEM only)</label><input id="@prefix-private-key" name="ConnectionInput.ClientPrivateKeyPath" value="@input.ClientPrivateKeyPath" maxlength="2048" autocomplete="off" /></div>
+    <div><label for="@prefix-client-ca">Client CA chain path (optional)</label><input id="@prefix-client-ca" name="ConnectionInput.ClientCaChainPath" value="@input.ClientCaChainPath" maxlength="2048" autocomplete="off" /><small>Use when intermediate certificates are not included in the client PEM or PFX.</small></div>
+    <div><label for="@prefix-password">Certificate / private-key password</label><input id="@prefix-password" name="ConnectionInput.ClientCertificatePassword" type="password" placeholder="Blank keeps saved password" autocomplete="new-password" maxlength="1024" /><label class="check"><input type="checkbox" name="ConnectionInput.ClearCertificatePassword" value="true" />Clear saved password (overrides the entry above)</label></div>
+    <div><label for="@prefix-server-ca">Server CA trust bundle path</label><input id="@prefix-server-ca" name="ConnectionInput.ServerCaChainPath" value="@input.ServerCaChainPath" maxlength="2048" autocomplete="off" /></div>
+    @if (!Model.Page.IsDss)
+    {
+        <div class="config-wide"><label for="@prefix-issuer-ca">Certificate issuer CA bundle path</label><input id="@prefix-issuer-ca" name="ConnectionInput.IssuerCaChainPath" value="@input.IssuerCaChainPath" maxlength="2048" autocomplete="off" /><small class="helper-text">The business CA chain used to validate issued user certificates.</small></div>
+    }
+    else
+    {
+        <div><label for="@prefix-app-key">Project appKey</label><input id="@prefix-app-key" name="ConnectionInput.AppKey" value="@input.AppKey" maxlength="512" autocomplete="off" /></div>
+        <div><label for="@prefix-app-secret">Project appSecret</label><input id="@prefix-app-secret" name="ConnectionInput.AppSecret" type="password" placeholder="Blank keeps saved secret" maxlength="4096" autocomplete="new-password" /></div>
+        <div class="config-wide"><label for="@prefix-response">Supplier response-signature template</label><textarea id="@prefix-response" name="ConnectionInput.ResponseSignatureTemplate" rows="3" maxlength="8192" spellcheck="false">@input.ResponseSignatureTemplate</textarea><small class="helper-text">Use only the confirmed supplier rule. Tokens: {method}, {path}, {requestNonce}, {requestTimestamp}, {responseNonce}, {responseTimestamp}, {appKey}, {body}, {appSecret}.</small></div>
+        <div><label for="@prefix-encoding">Response-signature encoding</label><select id="@prefix-encoding" name="ConnectionInput.ResponseSignatureEncoding"><option value="java-form" selected="@(input.ResponseSignatureEncoding == "java-form")">Java form URL encoding</option><option value="utf8" selected="@(input.ResponseSignatureEncoding == "utf8")">UTF-8</option></select></div>
+        <div><label for="@prefix-limit">Maximum decoded input (bytes)</label><input id="@prefix-limit" name="ConnectionInput.MaxInputBytes" value="@input.MaxInputBytes" type="number" min="1" max="16777216" required /><small class="helper-text">Use the supplier limit, up to the tool's 16 MiB cap.</small></div>
+        <label class="check config-wide"><input type="checkbox" name="ConnectionInput.DssResponseAuthConfirmed" value="true" checked="@input.DssResponseAuthConfirmed" /> Response-authentication rule confirmed with the supplier</label><input type="hidden" name="ConnectionInput.DssResponseAuthConfirmed" value="false" />
+    }
+    <div><label for="@prefix-timeout">Request timeout (seconds)</label><input id="@prefix-timeout" name="ConnectionInput.TimeoutSeconds" value="@input.TimeoutSeconds" type="number" min="1" max="300" required /></div>
+    <label class="check"><input type="checkbox" name="ConnectionInput.Active" value="true" checked="@input.Active" /> Enable connection</label><input type="hidden" name="ConnectionInput.Active" value="false" />
+    <p class="helper-text config-wide">Paths refer to files on the tool server. Passwords and secrets are encrypted and never displayed. Save disabled while access materials are pending.</p>
+    <button class="secondary-button" type="submit">Save connection</button>
+</form>

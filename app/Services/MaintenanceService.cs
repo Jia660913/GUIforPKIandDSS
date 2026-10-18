@@ -15,6 +15,11 @@ public sealed class MaintenanceService(IServiceScopeFactory scopeFactory, ILogge
                 var db = scope.ServiceProvider.GetRequiredService<ToolDbContext>();
                 await using var transaction = await db.Database.BeginTransactionAsync(stoppingToken);
                 var cutoff = DateTime.UtcNow.AddYears(-1);
+                var interrupted = DateTime.UtcNow.AddMinutes(-15);
+                await db.PkiApplications.Where(x => x.Status == "pending" && x.CreatedAtUtc < interrupted)
+                    .ExecuteUpdateAsync(x => x.SetProperty(r => r.Status, "unknown").SetProperty(r => r.ErrorMessage, "The tool stopped before recording a final result. Check the supplier request before retrying."), stoppingToken);
+                await db.DssSigningRecords.Where(x => x.Status == "pending" && x.CreatedAtUtc < interrupted)
+                    .ExecuteUpdateAsync(x => x.SetProperty(r => r.Status, "unknown").SetProperty(r => r.ErrorMessage, "The tool stopped before recording a final result."), stoppingToken);
                 await db.PkiApplications.Where(x => x.CreatedAtUtc < cutoff).ExecuteDeleteAsync(stoppingToken);
                 await db.DssSigningRecords.Where(x => x.CreatedAtUtc < cutoff).ExecuteDeleteAsync(stoppingToken);
                 await db.AuditRecords.Where(x => x.CreatedAtUtc < cutoff).ExecuteDeleteAsync(stoppingToken);

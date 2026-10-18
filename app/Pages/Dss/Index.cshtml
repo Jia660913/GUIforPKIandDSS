@@ -1,10 +1,129 @@
 @page
 @model DssIndexModel
-@{ ViewData["Title"] = "DSS 签名"; }
-<div class="section-head"><div><div class="eyebrow">DSS / PACKAGE SIGNING</div><h1>生成独立签名值</h1><p class="lede">输入摘要或短字符串，使用当前项目下的密钥完成签名。</p></div><div class="project-badge">@(Model.IsDemoMode ? "演示模式" : "供应商接口") · 项目 <strong>@(Model.Project?.Code ?? "未绑定")</strong></div></div>
-@if (Model.Project is null) { <div class="empty-state"><div class="empty-icon">!</div><h2>账号尚未绑定 DSS 项目</h2><p>请联系 DSS 管理员分配项目后再使用签名工具。</p></div> }
-else {
-<div class="workspace-grid"><form method="post" class="form-panel workspace-form"><div asp-validation-summary="ModelOnly" class="validation"></div><div class="step-label"><span>01</span>选择密钥</div><label asp-for="KeyId">项目密钥</label><select asp-for="KeyId"><option value="">选择 @Model.Project.Code 项目密钥</option>@foreach (var key in Model.Keys) { <option value="@key.Id">@key.Name · @key.SignAlgorithm</option> }</select><div class="step-label"><span>02</span>签名输入</div><div class="mode-switch"><label><input type="radio" asp-for="InputMode" value="hash" checked />摘要值</label><label><input type="radio" asp-for="InputMode" value="text" />字符串</label></div><label asp-for="InputValue">输入内容</label><textarea asp-for="InputValue" rows="8" placeholder="摘要模式：输入偶数位十六进制；字符串模式：输入需要签名的文本"></textarea><small id="input-help">摘要会按原始字节签名，不会再次计算哈希；最大输入 1 MiB（可配置）。</small><button class="primary-button" type="submit">计算签名 <span>→</span></button></form><aside class="side-rail"><div class="rail-card"><span class="rail-label">项目边界</span><h3>@Model.Project.DisplayName</h3><p>你只能看到这个项目的密钥。提交时后端会再次校验项目归属。</p></div><div class="rail-card quiet"><span class="rail-label">当前算法</span><p>Ed25519 · 供应商 `key-sign-text` 接口</p></div></aside></div>
+@{ ViewData["Title"] = "DSS signing"; }
+<div class="section-head">
+    <div><h1>Create a signature</h1><p class="lede">Sign a digest or text with an authorized project key.</p></div>
+    <div class="project-badge">@if (Model.IsAdmin) { <span>Administrator · <strong>All projects</strong></span> } else { <span>@(Model.IsDemoMode ? "Demo mode" : "Supplier API mode") · <strong>@(Model.Project?.Code ?? "No project assigned")</strong></span> }</div>
+</div>
+<form method="get" class="form-panel selection-panel">
+    <div class="form-grid">
+        @if (Model.IsAdmin)
+        {
+            <div><label asp-for="ProjectId">Project</label><select asp-for="ProjectId" required><option value="">Select a project</option>@foreach (var project in Model.Projects) { <option value="@project.Id">@project.Code · @project.DisplayName</option> }</select></div>
+        }
+        else
+        {
+            <input type="hidden" asp-for="ProjectId" />
+        }
+        <div><label asp-for="EnvironmentName">Environment</label><select asp-for="EnvironmentName"><option value="development">Development</option><option value="production">Production</option></select></div>
+    </div>
+    <button class="secondary-button" type="submit">Load keys</button>
+</form>
+<div asp-validation-summary="All" class="validation" role="alert"></div>
+@if (Model.KeyRefreshMessage is not null) { <p class="inline-note" role="status">@Model.KeyRefreshMessage</p> }
+@if (Model.Project is null)
+{
+    <div class="empty-state"><div class="empty-icon" aria-hidden="true">!</div>
+        @if (Model.IsAdmin)
+        {
+            <h2>@(Model.Projects.Count > 0 ? "Select a project" : "No projects configured")</h2><p>@(Model.Projects.Count > 0 ? "Your administrator account can access all configured projects. Select a project and environment to load its signing keys." : "Register projects and keys already available in the supplier system.")</p>
+            <a class="text-button" asp-page="/Admin/Index">Manage resource mappings</a>
+        }
+        else
+        {
+            <h2>No project available</h2><p>Ask your DSS administrator to assign an active project to your account.</p>
+        }
+    </div>
 }
-@if (Model.Result is not null) { <section class="result-panel @(Model.Result.Success ? "success" : "failure")"><div class="result-title">@(Model.Result.Success ? "签名已生成" : "签名未完成")</div><p>@(Model.Result.Success ? "请复制或下载独立签名值。" : Model.Result.Error)</p>@if (Model.Result.Success) { <textarea id="signature-result" readonly>@Model.Result.Signature</textarea><button class="secondary-button" type="button" onclick="copySignature()">复制签名值</button> }</section> }
-@section Scripts { <script>function copySignature(){navigator.clipboard.writeText(document.getElementById('signature-result').value);const b=event.currentTarget;b.textContent='已复制';setTimeout(()=>b.textContent='复制签名值',1500);}</script> }
+else
+{
+    <div class="workspace-grid">
+        <form method="post" class="form-panel workspace-form">
+            <input type="hidden" name="ProjectId" value="@Model.ProjectId" />
+            <input type="hidden" name="EnvironmentName" value="@Model.EnvironmentName" />
+            <div class="step-label"><span>01</span>Signing key</div>
+            <label asp-for="KeyId">Project key</label>
+            <select asp-for="KeyId" aria-describedby="key-help">
+                <option value="">Select a signing key</option>
+                @foreach (var key in Model.Keys)
+                {
+                    var supported = Model.SupportedAlgorithms.Contains(key.SignAlgorithm);
+                    var ready = supported && (Model.IsDemoMode || Model.ReadyKeys.GetValueOrDefault(key.Id));
+                    <option value="@key.Id" data-algorithm="@key.SignAlgorithm" data-ready="@(ready ? "true" : "false")">@key.Name · @(string.IsNullOrEmpty(key.SignAlgorithm) ? "Details not loaded" : key.SignAlgorithm)@(!supported && !string.IsNullOrEmpty(key.SignAlgorithm) ? " · Not supported" : !ready ? " · Setup required" : "")</option>
+                }
+            </select>
+            <small id="key-help">Registered signing keys for this project and environment. Details are checked with the supplier before each signature.</small>
+            @if (!Model.IsDemoMode && Model.Keys.Count > 0)
+            {
+                <button class="text-button" type="submit" asp-page-handler="RefreshKey" formnovalidate>Refresh selected key details</button>
+            }
+            <label asp-for="SignAlgorithm">Signing algorithm</label>
+            <select name="SignAlgorithm" id="SignAlgorithm" aria-describedby="algorithm-help" required disabled="@(!Model.SelectedKeyIsReady)">
+                @if (Model.SelectedKeyAlgorithm is null) { <option value="">Select a key first</option> }
+                else { <option value="@Model.SelectedKeyAlgorithm">@Model.SelectedKeyAlgorithm</option> }
+            </select>
+            <small id="algorithm-help">Set automatically from the selected key. Ed25519 is currently enabled.</small>
+            @if (!Model.CanSubmit)
+            {
+                <div class="inline-note">No signing key is ready for this environment. Ask your administrator to complete the existing supplier resource mapping.</div>
+            }
+            <div class="step-label"><span>02</span>Signing input</div>
+            <div class="mode-switch" role="group" aria-label="Input format"><label><input type="radio" asp-for="InputMode" id="input-digest" value="hash" />Digest</label><label><input type="radio" asp-for="InputMode" id="input-text" value="text" />Text</label></div>
+            <label asp-for="InputValue">Input</label><textarea asp-for="InputValue" rows="8" placeholder="Enter a hexadecimal digest or text to sign" aria-describedby="input-help" spellcheck="false"></textarea>
+            <small id="input-help">Digest: hexadecimal decoded to bytes. Text: UTF-8 bytes. No additional hashing. Tool limit: @Model.MaximumInputBytes.ToString("N0") bytes; a connection may have a lower limit.</small>
+            <button id="create-signature" class="primary-button" type="submit" disabled="@(!Model.SelectedKeyIsReady)">@(Model.IsDemoMode ? "Preview signing request" : "Create signature") <span aria-hidden="true">→</span></button>
+        </form>
+        <aside class="side-rail" aria-label="Signing settings">
+            <div class="rail-card"><span class="rail-label">Project</span><h3>@Model.Project.DisplayName</h3><span class="rail-label">Environment</span><p>@(Model.EnvironmentName == "development" ? "Development" : "Production")</p></div>
+            <div class="rail-card quiet"><span class="rail-label">Algorithm</span><p id="selected-algorithm">@(Model.SelectedKeyAlgorithm ?? "Select a key")</p><span class="rail-label">History</span><p>Inputs and results are retained for one year.</p>
+                @if (Model.IsDemoMode) { <p>Demo mode checks the workflow. It does not create a supplier signature.</p> }
+                @if (Model.IsAdmin) { <a asp-page="/Admin/Index">Manage resource mappings</a> }
+            </div>
+        </aside>
+    </div>
+}
+@if (Model.Result is not null)
+{
+    var demo = Model.Result.Status == "demo";
+    <section class="result-panel @(Model.Result.Success ? "success" : "failure")" aria-live="polite">
+        <h2 class="result-title">@(demo ? "Demo request checked" : Model.Result.Success ? "Signature verified" : Model.Result.Status == "unknown" ? "Outcome unconfirmed" : "Signing failed")</h2>
+        <p>@(demo ? "The input and project selection were recorded. No supplier was called and no signature was created." : Model.Result.Success ? "Response authentication and Ed25519 verification passed." : Model.Result.Error)</p>
+        @if (Model.Result.Success && !demo)
+        {
+            <label for="signature-result">Signature · hexadecimal</label><textarea id="signature-result" readonly spellcheck="false">@Model.Result.Signature</textarea>
+            <button class="secondary-button" type="button" onclick="copySignature(this)">Copy signature</button>
+            <a class="secondary-button" asp-page-handler="Signature" asp-route-recordId="@Model.Result.RecordId">Download .hex</a><span id="copy-status" role="status"></span>
+        }
+        @if (Model.Result.RecordId is not null) { <p>Record #@Model.Result.RecordId · <a asp-page="/History/Index">View history</a></p> }
+    </section>
+}
+@section Scripts {
+    <script>
+        const keySelect = document.getElementById('KeyId');
+        if (keySelect) {
+            const algorithmSelect = document.getElementById('SignAlgorithm');
+            const submitButton = document.getElementById('create-signature');
+            function updateKeyAlgorithm() {
+                const key = keySelect.selectedOptions[0];
+                const algorithm = key?.dataset.algorithm || '';
+                const ready = key?.dataset.ready === 'true';
+                algorithmSelect.replaceChildren(new Option(algorithm || 'Select a key first', algorithm));
+                algorithmSelect.disabled = !ready;
+                submitButton.disabled = !ready;
+                document.getElementById('selected-algorithm').textContent = algorithm || 'Select a key';
+            }
+            keySelect.addEventListener('change', updateKeyAlgorithm);
+            updateKeyAlgorithm();
+        }
+        async function copySignature(button) {
+            try {
+                await navigator.clipboard.writeText(document.getElementById('signature-result').value);
+                button.textContent = 'Copied';
+                document.getElementById('copy-status').textContent = 'Signature copied.';
+                setTimeout(() => button.textContent = 'Copy signature', 1500);
+            } catch {
+                document.getElementById('copy-status').textContent = 'Select the signature and copy it manually.';
+            }
+        }
+    </script>
+}

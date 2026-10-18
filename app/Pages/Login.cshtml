@@ -1,13 +1,33 @@
 @page
 @model LoginModel
-@{ ViewData["Title"] = "登录"; }
-<section class="auth-layout">
-    <div class="auth-context"><span class="eyebrow">SECURE ACCESS</span><h1>进入你的<br /><em>@Model.ModuleLabel</em>工作区</h1><p>使用工具系统账号登录。供应商后台账号不会在这里使用。</p><a asp-page="/Index" class="back-link">← 返回工具选择</a></div>
+@{ ViewData["Title"] = $"Sign in to {Model.Module.ToUpperInvariant()}"; ViewData["PageClass"] = "login-page"; }
+<section class="auth-layout" aria-labelledby="login-title">
     <form method="post" class="auth-panel">
-        <input type="hidden" asp-for="Module" /><div class="panel-label">工具账号登录</div><h2>@Model.ModuleLabel</h2>
-        <div asp-validation-summary="ModelOnly" class="validation"></div>
-        <label asp-for="Username">账号</label><input asp-for="Username" autocomplete="username" placeholder="输入工具账号" />
-        <label asp-for="Password">密码</label><input asp-for="Password" type="password" autocomplete="current-password" placeholder="输入密码" />
-        <button class="primary-button" type="submit">登录工作区 <span>→</span></button><p class="form-note">首次登录后需要修改初始密码。</p>
+        <input type="hidden" asp-for="Module" />
+        <h1 id="login-title">Sign in to @Model.Module.ToUpperInvariant()</h1>
+        <p class="auth-intro">Use your @Model.Module.ToUpperInvariant() tool account.</p>
+        <div asp-validation-summary="All" class="validation" role="alert"></div>
+        <label asp-for="Username">Username</label>
+        <input asp-for="Username" autocomplete="username" placeholder="Enter your username" autocapitalize="none" spellcheck="false" required />
+        <label asp-for="Password">Password</label>
+        <div class="password-field">
+            <input asp-for="Password" type="password" autocomplete="current-password" placeholder="Enter your password" required />
+            <button class="password-toggle" type="button" aria-label="Show password" aria-pressed="false" aria-controls="Password">Show</button>
+        </div>
+        <button class="primary-button" type="submit">Sign in <span aria-hidden="true">→</span></button>
+        <p class="form-note">Need access or a password reset?<br />Contact your @Model.Module.ToUpperInvariant() administrator.</p>
     </form>
 </section>
+@section Scripts {
+    <script>
+        const toggle = document.querySelector('.password-toggle');
+        toggle.addEventListener('click', () => {
+            const password = document.getElementById('Password');
+            const show = password.type === 'password';
+            password.type = show ? 'text' : 'password';
+            toggle.textContent = show ? 'Hide' : 'Show';
+            toggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            toggle.setAttribute('aria-pressed', String(show));
+        });
+    </script>
+}

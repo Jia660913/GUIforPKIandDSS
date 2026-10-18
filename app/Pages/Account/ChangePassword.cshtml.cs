@@ -15,9 +15,12 @@ public class ChangePasswordModel(ToolDbContext db, IPasswordHasher<AppUser> hash
     {
         var user = await session.CurrentAsync(User, ct);
         if (user is null) return RedirectToPage("/Login");
-        if (hasher.VerifyHashedPassword(user, user.PasswordHash, CurrentPassword) == PasswordVerificationResult.Failed) ModelState.AddModelError(nameof(CurrentPassword), "当前密码不正确。");
-        if (NewPassword.Length < 12) ModelState.AddModelError(nameof(NewPassword), "密码至少 12 个字符。");
-        if (NewPassword != ConfirmPassword) ModelState.AddModelError(nameof(ConfirmPassword), "两次输入的密码不一致。");
+        CurrentPassword ??= "";
+        NewPassword ??= "";
+        ConfirmPassword ??= "";
+        if (string.IsNullOrEmpty(CurrentPassword) || hasher.VerifyHashedPassword(user, user.PasswordHash, CurrentPassword) == PasswordVerificationResult.Failed) ModelState.AddModelError(nameof(CurrentPassword), "The current password is incorrect.");
+        if (NewPassword.Length < 12) ModelState.AddModelError(nameof(NewPassword), "Use at least 12 characters.");
+        if (NewPassword != ConfirmPassword) ModelState.AddModelError(nameof(ConfirmPassword), "The passwords do not match.");
         if (!ModelState.IsValid) return Page();
         user.PasswordHash = hasher.HashPassword(user, NewPassword); user.MustChangePassword = false; db.AuditRecords.Add(new AuditRecord { UserId = user.Id, Action = "change-password" }); await db.SaveChangesAsync(ct);
         return RedirectToPage(user.Module == ToolModule.Pki ? "/Pki/Index" : "/Dss/Index");

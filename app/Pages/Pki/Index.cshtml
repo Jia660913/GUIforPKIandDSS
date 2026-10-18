@@ -1,21 +1,149 @@
 @page
 @model PkiIndexModel
-@{ ViewData["Title"] = "PKI 证书"; }
-<div class="section-head"><div><div class="eyebrow">PKI / CERTIFICATE REQUEST</div><h1>申请三级证书</h1><p class="lede">选择已配置模板，填写 ECU 标识，提交后直接获得供应商签发结果。</p></div><div class="head-meta"><span class="status-dot"></span>@(Model.IsDemoMode ? "演示模式 · 不调用供应商" : "供应商接口模式")</div></div>
-<div class="workspace-grid">
-    <form method="post" enctype="multipart/form-data" class="form-panel workspace-form">
-        <div asp-validation-summary="ModelOnly" class="validation"></div>
-        <div class="step-label"><span>01</span>证书模板</div>
-        <label asp-for="TemplateId">三级证书模板</label><select asp-for="TemplateId"><option value="">选择证书模板</option>@foreach (var item in Model.Templates) { <option value="@item.Id">@item.DisplayName · @item.EnvironmentName</option> }</select>
-        <div class="field-grid"><div><label asp-for="EcuVariantId">ECU Variant ID</label><input asp-for="EcuVariantId" placeholder="例如 0040000100000000" /><small>十六进制，最多 16 字节</small></div><div><label asp-for="EcuUniqueId">ECU Unique ID <span class="optional">可选 / Claims 必填</span></label><input asp-for="EcuUniqueId" placeholder="按证书规范填写" /><small>UTF-8 编码最多 32 字节</small></div></div>
-        <div class="step-label"><span>02</span>证书请求</div>
-        <div class="mode-switch"><label><input type="radio" asp-for="CsrMode" value="generate" checked />工具生成 CSR</label><label><input type="radio" asp-for="CsrMode" value="upload" />上传已有 CSR</label></div>
-        <div id="generate-fields"><label asp-for="CommonName">CSR Common Name</label><input asp-for="CommonName" placeholder="例如 ECU-001 或 UUID" /><small>工具会生成 Ed25519 密钥对、CSR 和可下载的私钥。</small></div>
-        <div id="upload-fields" hidden><label asp-for="CsrFile">CSR 文件</label><input asp-for="CsrFile" type="file" accept=".csr,.pem,.txt" /><small>仅上传公钥证书请求，不要上传私钥。</small></div>
-        <button class="primary-button" type="submit">提交申请 <span>→</span></button>
-    </form>
-    <aside class="side-rail"><div class="rail-card"><span class="rail-label">当前规则</span><h3>字段由证书规范约束</h3><p>工具只展示管理员已启用的三级模板；CertType、TrustGrade、角色和 OID 由模板映射处理。</p></div><div class="rail-card quiet"><span class="rail-label">留存说明</span><p>申请结果、CSR 摘要和请求 ID 保存一年。私钥只在生成后下载，不写入服务器记录。</p></div></aside>
+@using ZfTools.Data
+@using ZfTools.Services
+@{ ViewData["Title"] = "PKI certificates"; }
+<div class="section-head">
+    <div><h1>Request a certificate</h1><p class="lede">Choose an environment and diagnostic certificate template, then enter the ECU details or upload a CSR.</p></div>
+    <div class="head-meta"><span class="status-dot"></span>@(Model.IsDemoMode ? "Demo · no certificates issued" : "Supplier API mode")</div>
 </div>
-@if (Model.Result is not null) { <section class="result-panel @(Model.Result.Success ? "success" : "failure")"><div class="result-title">@(Model.Result.Success ? "证书申请已完成" : "申请未完成")</div><p>@(Model.Result.Success ? $"请求 ID：{Model.Result.RequestId}" : Model.Result.Error)</p>@if (Model.Result.Success) { <textarea id="certificate-result" readonly>@Model.Result.Certificate</textarea><button class="secondary-button" type="button" onclick="downloadText('certificate-result','certificate.pem')">下载证书</button> }</section> }
-@if (Model.GeneratedPrivateKey is not null) { <section class="result-panel success"><div class="result-title">CSR 已生成</div><p>请先下载私钥，再提交 CSR。私钥离开此页面后无法恢复。</p><textarea id="private-key-result" readonly>@Model.GeneratedPrivateKey</textarea><button class="secondary-button" type="button" onclick="downloadText('private-key-result','private-key.pem')">下载 PKCS#8 私钥</button><textarea id="generated-csr" hidden>@Model.GeneratedCsr</textarea></section> }
-@section Scripts { <script>document.querySelectorAll('input[name="CsrMode"]').forEach(x => x.addEventListener('change', () => { const upload = document.querySelector('#upload-fields'); const generate = document.querySelector('#generate-fields'); const isUpload = document.querySelector('input[name="CsrMode"]:checked').value === 'upload'; upload.hidden = !isUpload; generate.hidden = isUpload; })); function downloadText(id, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([document.getElementById(id).value], {type:'text/plain'})); a.download = name; a.click(); URL.revokeObjectURL(a.href); }</script> }
+<div class="workspace-grid">
+    <form method="post" enctype="multipart/form-data" class="form-panel workspace-form" id="pki-form">
+        <div asp-validation-summary="All" class="validation" role="alert"></div>
+        <div class="step-label"><span>01</span>Certificate template</div>
+        <div class="field-grid">
+            <div><label asp-for="EnvironmentName">Environment</label><select asp-for="EnvironmentName"><option value="development">Development · dev</option><option value="production">Production · field</option></select></div>
+            <div><label asp-for="TemplateId">Certificate template</label>
+                <select asp-for="TemplateId"><option value="">Select a template</option>
+                    @foreach (var item in Model.Templates)
+                    {
+                        var role = PkiRoleCatalog.Find(item.DiagUserRole);
+                        <option value="@item.Id" hidden="@(item.EnvironmentName != Model.EnvironmentName)" disabled="@(item.EnvironmentName != Model.EnvironmentName)" data-environment="@item.EnvironmentName" data-requires-unique="@(role?.RequiresUniqueId == true ? "true" : "false")" data-role="@(role?.Name ?? "Unconfigured role")" data-validity="@(role?.ValidityDays.ToString() ?? "—")" data-variant-bytes="@item.VariantExactBytes" data-ready="@(PkiService.GetReadinessErrors(item).Count == 0 ? "true" : "false")">@item.DisplayName</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <small id="template-summary">Select a template to view its diagnostic role and validity.</small>
+        <div class="step-label"><span>02</span>Certificate request</div>
+        <div class="mode-switch" role="group" aria-label="CSR source">
+            <label><input type="radio" asp-for="CsrMode" id="csr-generate" value="generate" />Generate a CSR</label>
+            <label><input type="radio" asp-for="CsrMode" id="csr-upload" value="upload" />Upload a CSR</label>
+        </div>
+        <div id="generate-fields">
+            <div class="field-grid">
+                <div><label asp-for="EcuVariantId">ECU Variant ID <span class="optional">Required</span></label><input asp-for="EcuVariantId" placeholder="e.g. 0040000100000000" aria-describedby="variant-help" aria-required="true" /><small id="variant-help">Identifies the ECU variant and customer. Hexadecimal, up to 16 bytes.</small></div>
+                <div><label asp-for="EcuUniqueId">ECU Unique ID <span class="optional" id="unique-requirement">Optional</span></label><input asp-for="EcuUniqueId" placeholder="Enter the individual ECU identifier" aria-describedby="unique-help" /><small id="unique-help">Identifies one ECU. Up to 32 UTF-8 bytes. Required for Development and Claims; optional for other roles.</small></div>
+            </div>
+            <label asp-for="CommonName">CSR Common Name</label><input asp-for="CommonName" placeholder="Enter the configured certificate identity" />
+            <small>Creates an Ed25519 key pair. Save the private key before submitting the CSR.</small>
+        </div>
+        <div id="upload-fields" hidden>
+            <label asp-for="CsrFile">CSR file</label>
+            <div class="file-picker">
+                <input asp-for="CsrFile" type="file" accept=".csr,.pem,.txt" aria-describedby="upload-help" />
+                <span class="file-picker-action" aria-hidden="true">Choose CSR</span>
+                <span id="csr-file-name" aria-hidden="true">No file selected</span>
+            </div>
+            <small id="upload-help">Public PEM request, up to 128 KiB. ECU identifiers and Common Name are read from the CSR and checked against the selected template.</small>
+        </div>
+        <button class="secondary-button" type="submit" asp-page-handler="Preview" id="preview-button">Prepare CSR</button>
+        @if (Model.Preview is not null)
+        {
+            <div class="step-label"><span>03</span>Review and submit</div>
+            <dl class="request-summary">
+                <dt>Common Name</dt><dd>@Model.Preview.CommonName</dd>
+                <dt>ECU Variant ID</dt><dd>@Model.Preview.VariantId</dd>
+                <dt>ECU Unique ID</dt><dd>@(Model.Preview.UniqueId ?? "Not included")</dd>
+                <dt>Diagnostic role</dt><dd>@PkiRoleCatalog.Find(Model.SelectedTemplate?.DiagUserRole)?.Name</dd>
+                <dt>Environment</dt><dd>@(Model.EnvironmentName == "production" ? "Production · field" : "Development · dev")</dd>
+            </dl>
+            @if (Model.GeneratedPrivateKey is not null)
+            {
+                <div class="validation" role="status">Save your private key now. It is not retained and cannot be recovered after leaving this page.</div>
+                <button class="secondary-button" type="button" onclick="downloadText('private-key-result','private-key.pem')">Download private key</button>
+                <textarea id="private-key-result" hidden>@Model.GeneratedPrivateKey</textarea>
+            }
+            <button class="secondary-button" type="button" onclick="downloadText('csr-preview','request.csr')">Download CSR</button>
+            <textarea id="csr-preview" hidden>@Model.Preview.Pem</textarea>
+            @if (Model.CsrMode == "generate" && !string.IsNullOrEmpty(Model.PreparedCsr))
+            {
+                <label class="checkbox-label"><input asp-for="PrivateKeySaved" />I have saved the private key for this CSR.</label>
+            }
+            @if (!Model.IsDemoMode && Model.ReadinessErrors.Count > 0)
+            {
+                <div class="validation" role="status"><strong>Connection not ready.</strong> Ask an administrator to complete this template's supplier mapping.</div>
+            }
+        }
+        <textarea asp-for="PreparedCsr" hidden></textarea>
+        <button class="primary-button" type="submit" asp-page-handler="Apply" id="apply-button" disabled="@(string.IsNullOrEmpty(Model.PreparedCsr) || (!Model.IsDemoMode && Model.ReadinessErrors.Count > 0))">@(Model.IsDemoMode ? "Validate demo request" : "Request certificate") <span aria-hidden="true">→</span></button>
+        <small id="prepare-again" hidden>The request details changed. Prepare the CSR again before submitting.</small>
+    </form>
+    <aside class="side-rail" aria-label="Certificate request notes">
+        <div class="rail-card"><span class="rail-label">Certificate scope</span><h3>ECU and permissions</h3><p>ECU Variant ID identifies the ECU variant and customer, such as OGM for DAF or OGM for IVECO.</p><p>The diagnostic role is a certificate extension that determines which diagnostic operations are permitted on that ECU. It is set by your selected template.</p></div>
+        <div class="rail-card quiet"><span class="rail-label">Private key</span><p>The supplier receives the public CSR only. Your private key is not stored in request history.</p><span class="rail-label">Request history</span><p>Records are retained for one year. A timeout may leave issuance unresolved; check the request ID before retrying.</p></div>
+    </aside>
+</div>
+@if (Model.Result is not null)
+{
+    var title = Model.Result.Status switch { "succeeded" => "Certificate issued and validated", "demo" => "Demo validation completed", "unknown" => "Certificate request needs checking", _ => "Certificate request failed" };
+    <section class="result-panel @(Model.Result.Success || Model.Result.Status == "demo" ? "success" : "failure")" aria-live="polite">
+        <h2 class="result-title">@title</h2><p>Request ID: @Model.Result.RequestId</p>
+        @if (Model.Result.Error is not null) { <p>@Model.Result.Error</p> }
+        @if (Model.Result.Success)
+        {
+            <label for="certificate-result">Certificate</label><textarea id="certificate-result" readonly>@Model.Result.Certificate</textarea>
+            <button class="secondary-button" type="button" onclick="downloadText('certificate-result','certificate.pem')">Download certificate</button>
+        }
+    </section>
+}
+@section Scripts {
+<script>
+    const environment = document.getElementById('EnvironmentName');
+    const templates = document.getElementById('TemplateId');
+    const prepared = document.getElementById('PreparedCsr');
+    function updateTemplates() {
+        for (const option of templates.options) {
+            const excluded = option.value && option.dataset.environment !== environment.value;
+            option.hidden = !!excluded; option.disabled = !!excluded;
+        }
+        if (templates.selectedOptions[0]?.disabled) templates.value = '';
+        updateTemplateFields();
+    }
+    function updateTemplateFields() {
+        const option = templates.selectedOptions[0];
+        const required = option?.dataset.requiresUnique === 'true';
+        document.getElementById('unique-requirement').textContent = required ? 'Required' : 'Optional';
+        document.getElementById('EcuUniqueId').setAttribute('aria-required', String(required));
+        const bytes = Number(option?.dataset.variantBytes || 0);
+        document.getElementById('variant-help').textContent = `Identifies the ECU variant and customer. ${bytes ? `Hexadecimal, exactly ${bytes} bytes.` : 'Hexadecimal, up to 16 bytes.'}`;
+        document.getElementById('template-summary').textContent = option?.value ? `Diagnostic role: ${option.dataset.role} · Validity: ${option.dataset.validity} days${option.dataset.ready === 'true' ? '' : ' · Supplier mapping pending'}` : 'Select a template to view its diagnostic role and validity.';
+    }
+    function updateCsrMode() {
+        const upload = document.querySelector('input[name="CsrMode"]:checked')?.value === 'upload';
+        document.getElementById('upload-fields').hidden = !upload;
+        document.getElementById('generate-fields').hidden = upload;
+        document.getElementById('preview-button').textContent = upload ? 'Read and validate CSR' : 'Generate key and CSR';
+    }
+    function invalidatePrepared() {
+        if (!prepared.value) return;
+        prepared.value = '';
+        document.getElementById('apply-button').disabled = true;
+        document.getElementById('prepare-again').hidden = false;
+        const saved = document.getElementById('PrivateKeySaved'); if (saved) saved.checked = false;
+    }
+    environment.addEventListener('change', () => { invalidatePrepared(); updateTemplates(); });
+    templates.addEventListener('change', () => { invalidatePrepared(); updateTemplateFields(); });
+    document.querySelectorAll('input[name="CsrMode"]').forEach(input => input.addEventListener('change', () => { invalidatePrepared(); updateCsrMode(); }));
+    for (const id of ['EcuVariantId','EcuUniqueId','CommonName','CsrFile']) document.getElementById(id).addEventListener('input', invalidatePrepared);
+    document.getElementById('CsrFile').addEventListener('change', event => {
+        document.getElementById('csr-file-name').textContent = event.target.files[0]?.name || 'No file selected';
+    });
+    updateTemplates(); updateCsrMode();
+    function downloadText(id, name) {
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(new Blob([document.getElementById(id).value], { type: 'text/plain' }));
+        link.href = url; link.download = name; document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+</script>
+}

@@ -2,6 +2,8 @@
 app/zf-tools.db
 app/zf-tools.db-*
 app/.keyring/
+zf-tools.db*
+.keyring/
 app/*.pfx
 app/*.p12
 app/*.pem

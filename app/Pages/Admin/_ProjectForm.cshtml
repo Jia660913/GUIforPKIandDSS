@@ -1,0 +1,9 @@
+@model ProjectForm
+@{ var prefix = $"project-map-{Model.Id}"; }
+<form method="post" asp-page-handler="SaveProject" class="inline-form compact">
+    <input type="hidden" name="ProjectInput.Id" value="@Model.Id" />
+    <div><label for="@prefix-code">Project code</label><input id="@prefix-code" name="ProjectInput.Code" value="@Model.Code" maxlength="64" required /></div>
+    <div><label for="@prefix-name">Tool display name</label><input id="@prefix-name" name="ProjectInput.DisplayName" value="@Model.DisplayName" maxlength="160" required /></div>
+    <label class="check"><input type="checkbox" name="ProjectInput.Active" value="true" checked="@Model.Active" /> Enable project access</label><input type="hidden" name="ProjectInput.Active" value="false" />
+    <button class="secondary-button" type="submit">Save project access</button>
+</form>

@@ -1,0 +1,12 @@
+@model KeyEditor
+@{ var input = Model.Input; var prefix = $"key-{input.Id}"; }
+<form method="post" asp-page-handler="SaveKey" class="inline-form compact">
+    <input type="hidden" name="KeyInput.Id" value="@input.Id" />
+    <div><label for="@prefix-project">Project</label><select id="@prefix-project" name="KeyInput.DssProjectId" required><option value="">Select a project</option>@foreach (var project in Model.Page.Projects) { <option value="@project.Id" selected="@(input.DssProjectId == project.Id)">@project.Code@(project.Active ? "" : " · disabled")</option> }</select></div>
+    <div><label for="@prefix-name">Exact supplier keyName</label><input id="@prefix-name" name="KeyInput.Name" value="@input.Name" maxlength="128" required /></div>
+    <div><label for="@prefix-env">Environment</label><select id="@prefix-env" name="KeyInput.EnvironmentName"><option value="development" selected="@(input.EnvironmentName == "development")">Development</option><option value="production" selected="@(input.EnvironmentName == "production")">Production</option></select></div>
+    <div><label for="@prefix-connection">DSS connection</label><select id="@prefix-connection" name="KeyInput.SupplierConnectionId"><option value="">Not configured</option>@foreach (var connection in Model.Page.Connections) { <option value="@connection.Id" selected="@(input.SupplierConnectionId == connection.Id)">@connection.Project?.Code · @connection.Name · @(connection.EnvironmentName == "production" ? "Production" : "Development")@(connection.Active ? "" : " · disabled")</option> }</select></div>
+    <p class="helper-text config-wide">The algorithm and verification public key are read from the supplier. Changing the key name, connection or environment clears the previous supplier details.</p>
+    <label class="check"><input type="checkbox" name="KeyInput.Active" value="true" checked="@input.Active" /> Enable key mapping</label><input type="hidden" name="KeyInput.Active" value="false" />
+    <button class="secondary-button" type="submit">Save registration</button>
+</form>

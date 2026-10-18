@@ -1,28 +1,43 @@
 @using System.Security.Claims
+@{
+    var currentPage = ViewContext.RouteData.Values["page"]?.ToString();
+    var isEntryPage = currentPage is "/Index" or "/Login";
+    var moduleHome = User.FindFirstValue("module") == "Dss" ? "/Dss" : "/Pki";
+    var backFallback = isEntryPage || User.Identity?.IsAuthenticated != true || currentPage is "/Pki/Index" or "/Dss/Index" ? "/" : moduleHome;
+}
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] · ZF 工具台</title>
+    <title>ZF Div.I PKI &amp; DSS System</title>
+    <link rel="icon" type="image/svg+xml" href="~/images/zf-logo.svg" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
 </head>
-<body>
+<body class="@(ViewData["PageClass"] as string)">
+    <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="topbar">
-        <a class="brand" asp-page="/Index"><span class="brand-mark">Z</span><span>ZF 工具台</span></a>
-        @if (User.Identity?.IsAuthenticated == true)
+        <a class="brand" asp-page="/Index" aria-label="Cybersecurity Engineering: PKI & DSS System home"><img class="brand-logo" src="~/images/zf-logo.svg" alt="ZF" width="42" height="42" /><span>Cybersecurity Engineering: PKI &amp; DSS System</span></a>
+        @if (!isEntryPage && User.Identity?.IsAuthenticated == true)
         {
-            <nav class="nav-links" aria-label="主导航">
-                @if (User.FindFirstValue("module") == "Pki") { <a asp-page="/Pki/Index">PKI 证书</a> }
-                @if (User.FindFirstValue("module") == "Dss") { <a asp-page="/Dss/Index">DSS 签名</a> }
-                <a asp-page="/History/Index">记录</a>
-                @if (User.IsInRole("Admin")) { <a asp-page="/Admin/Index">管理</a> }
+            <nav class="nav-links" aria-label="Main navigation">
+                @if (User.FindFirstValue("module") == "Pki") { <a asp-page="/Pki/Index" aria-current="@(currentPage == "/Pki/Index" ? "page" : null)">Certificates</a> }
+                @if (User.FindFirstValue("module") == "Dss") { <a asp-page="/Dss/Index" aria-current="@(currentPage == "/Dss/Index" ? "page" : null)">Signing</a> }
+                <a asp-page="/History/Index" aria-current="@(currentPage == "/History/Index" ? "page" : null)">History</a>
+                @if (User.IsInRole("Admin")) { <a asp-page="/Admin/Index" aria-current="@(currentPage == "/Admin/Index" ? "page" : null)">Administration</a> }
             </nav>
-            <div class="account-chip"><span>@User.Identity.Name</span><form method="post" asp-page="/Logout"><button class="signout" type="submit">退出</button></form></div>
+            <div class="account-chip"><a asp-page="/Account/ChangePassword" class="account-name" title="Change password">@User.Identity.Name</a><form method="post" asp-page="/Logout"><button class="signout" type="submit">Sign out</button></form></div>
         }
     </header>
-    <main class="page-shell">@RenderBody()</main>
-    <footer class="footer">ZF 工具台 · 本地部署基线 · 记录保留 1 年</footer>
+    <main id="main-content" class="page-shell">@RenderBody()</main>
+    <footer class="footer">
+        @if (currentPage != "/Index")
+        {
+            <a class="footer-back" href="@backFallback" data-back-link><span aria-hidden="true">←</span> Back</a>
+        }
+        <div class="footer-support"><span>Technical support · ZF CVS China Cybersecurity</span><a href="mailto:CVSChinaCybersecurity@zf.com">CVSChinaCybersecurity@zf.com</a></div>
+    </footer>
+    <script src="~/js/navigation.js" asp-append-version="true" defer></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

@@ -1,42 +1,149 @@
 @page
 @model AdminModel
-@{ ViewData["Title"] = "管理中心"; }
-<div class="section-head"><div><div class="eyebrow">ADMIN / @Model.ModuleLabel</div><h1>管理中心</h1><p class="lede">账号、权限和供应商映射由管理员维护。</p></div><div class="head-meta">管理员视图</div></div>
-@if (!string.IsNullOrWhiteSpace(Model.Message)) { <div class="notice success-note">@Model.Message</div> }
+@{ ViewData["Title"] = "Administration"; }
+<div class="section-head"><div><h1>Administration</h1><p class="lede">Manage accounts, access and supplier integration.</p></div><div class="head-meta">@Model.ModuleLabel</div></div>
+@if (!string.IsNullOrWhiteSpace(Model.Message))
+{
+    <div class="@(Model.MessageIsError ? "validation" : "notice success-note")" role="@(Model.MessageIsError ? "alert" : "status")">@Model.Message</div>
+}
+<div asp-validation-summary="All" class="validation" role="alert"></div>
 <div class="admin-grid">
-<section class="admin-section">
-    <div class="section-title"><div><span class="rail-label">01 · ACCOUNTS</span><h2>工具账号</h2></div></div>
-    <form method="post" asp-page-handler="CreateUser" class="inline-form">
-        <input asp-for="NewUsername" placeholder="新账号" /><input asp-for="NewDisplayName" placeholder="显示名称" /><input asp-for="NewPassword" placeholder="初始密码（至少 12 位）" type="password" />
-        @if (Model.IsDss) { <select asp-for="NewProjectId"><option value="">绑定 DSS 项目</option>@foreach (var project in Model.Projects) { <option value="@project.Id">@project.Code · @project.DisplayName</option> }</select> }
-        <button class="secondary-button" type="submit">新增账号</button>
-    </form>
-    <div class="admin-list">
-    @foreach (var user in Model.Users) {
-        <div class="admin-row"><div><strong>@user.Username</strong><small>@user.DisplayName · @(user.Active ? "已激活" : "已吊销") @if (Model.IsDss) { <span>· @(user.DssProject?.Code ?? "未绑定项目")</span> }</small></div>
-            @if (Model.IsDss && user.Role == UserRole.User) { <form method="post" asp-page-handler="ChangeProject" class="project-change"><input type="hidden" name="id" value="@user.Id" /><select name="projectId">@foreach (var project in Model.Projects) { <option value="@project.Id" selected="@(project.Id == user.DssProjectId)">@project.Code</option> }</select><button class="text-button" type="submit">变更项目</button></form> }
-            <form method="post" asp-page-handler="ToggleUser"><input type="hidden" name="id" value="@user.Id" /><button class="text-button" type="submit">@(user.Active ? "吊销" : "激活")</button></form>
-            <form method="post" asp-page-handler="ResetPassword"><input type="hidden" name="id" value="@user.Id" /><button class="text-button" type="submit">重置密码</button></form>
-        </div>
-    }
-    </div>
-</section>
-<section class="admin-section">
-    <div class="section-title"><div><span class="rail-label">02 · CONFIGURATION</span><h2>@(Model.IsDss ? "项目与密钥" : "三级证书模板")</h2></div></div>
-    @if (!Model.IsDss) {
-        <form method="post" asp-page-handler="CreateTemplate" class="inline-form"><input asp-for="TemplateName" placeholder="模板显示名称" /><input asp-for="CertProfile" placeholder="供应商 cert_profile" /><select asp-for="TemplateEnvironment"><option value="development">开发</option><option value="production">量产</option></select><input asp-for="TemplateCertType" placeholder="CertType，例如 diagUser" /><input asp-for="TemplateTrustGrade" placeholder="TrustGrade，例如 dev / field" /><input asp-for="TemplateDiagUserRole" placeholder="DiagUserRole 位掩码，例如 80" /><label class="check"><input asp-for="TemplateRequiresUnique" /> Claims 必填 Unique ID</label><button class="secondary-button" type="submit">新增模板</button></form>
-        <div class="admin-list">@foreach (var t in Model.Templates) { <div class="admin-row"><div><strong>@t.DisplayName</strong><small>@t.CertProfile · @t.EnvironmentName · @t.CertType / @t.TrustGrade / 0x@t.DiagUserRole · @(t.RequiresEcuUniqueId ? "Unique ID 必填" : "Unique ID 可选")</small></div><span class="status-text">@(t.Active ? "启用" : "停用")</span></div> }</div>
-    } else {
-        <form method="post" asp-page-handler="CreateProject" class="inline-form"><input asp-for="ProjectCode" placeholder="项目代号" /><input asp-for="ProjectName" placeholder="项目显示名称" /><button class="secondary-button" type="submit">新增项目</button></form>
-        <form method="post" asp-page-handler="CreateKey" class="inline-form"><select asp-for="KeyProjectId"><option value="">所属项目</option>@foreach (var project in Model.Projects) { <option value="@project.Id">@project.Code</option> }</select><input asp-for="KeyName" placeholder="供应商密钥名称" /><input asp-for="KeyAlgorithm" placeholder="签名算法" /><button class="secondary-button" type="submit">新增密钥</button></form>
+    <section class="admin-section">
+        <div class="section-title"><h2>Tool accounts</h2><span class="status-text">@Model.Users.Count accounts</span></div>
+        <details class="config-editor" open="@(Model.SubmittedForm == "CreateUser")">
+            <summary>Add account</summary>
+            <form method="post" asp-page-handler="CreateUser" class="inline-form">
+                <div><label asp-for="NewUsername">Username</label><input asp-for="NewUsername" maxlength="80" autocomplete="off" required /></div>
+                <div><label asp-for="NewDisplayName">Display name</label><input asp-for="NewDisplayName" maxlength="120" autocomplete="off" /></div>
+                <div><label asp-for="NewPassword">Initial password</label><input name="NewPassword" id="NewPassword" placeholder="At least 12 characters" type="password" minlength="12" maxlength="256" autocomplete="new-password" required /></div>
+                @if (Model.IsDss)
+                {
+                    <div><label asp-for="NewProjectId">DSS project</label><select asp-for="NewProjectId" required><option value="">Select a project</option>@foreach (var project in Model.Projects.Where(x => x.Active)) { <option value="@project.Id">@project.Code · @project.DisplayName</option> }</select></div>
+                }
+                <button class="secondary-button" type="submit">Add account</button>
+            </form>
+        </details>
         <div class="admin-list">
-        @foreach (var project in Model.Projects) {
-            <div class="project-config"><div class="admin-row project-row"><div><strong>@project.Code · @project.DisplayName</strong><small>@(string.IsNullOrWhiteSpace(project.BaseUrl) ? "接口地址未配置" : project.BaseUrl)</small></div><span class="status-text">@project.Keys.Count 个密钥</span></div>
-                <form method="post" asp-page-handler="UpdateProject" class="inline-form compact"><input type="hidden" name="id" value="@project.Id" /><input name="baseUrl" value="@project.BaseUrl" placeholder="供应商 HTTPS 地址" /><input name="appKey" value="@project.AppKey" placeholder="appKey" /><input name="appSecret" type="password" placeholder="留空保留 appSecret" /><input name="certificatePath" value="@project.ClientCertificatePath" placeholder="mTLS 客户端证书路径" /><input name="certificatePassword" type="password" placeholder="留空保留证书密码" /><button class="text-button" type="submit">保存项目配置</button></form>
-                @foreach (var key in project.Keys) { <div class="admin-row nested"><div><strong>@key.Name</strong><small>@key.SignAlgorithm · @project.Code</small></div></div> }
+        @foreach (var user in Model.Users)
+        {
+            <div class="admin-row">
+                <div><strong>@user.Username</strong><small>@user.DisplayName · @(user.Active ? "Active" : "Revoked") @if (user.Role == UserRole.Admin) { <span>· Administrator</span> } @if (Model.IsDss && user.Role != UserRole.Admin) { <span>· @(user.DssProject?.Code ?? "No project")</span> }</small></div>
+                @if (user.Role == UserRole.User)
+                {
+                    @if (Model.IsDss)
+                    {
+                        <form method="post" asp-page-handler="ChangeProject" class="project-change"><input type="hidden" name="id" value="@user.Id" /><label for="project-@user.Id" class="visually-hidden">Project for @user.Username</label><select name="projectId" id="project-@user.Id" required><option value="">Select a project</option>@foreach (var project in Model.Projects.Where(x => x.Active)) { <option value="@project.Id" selected="@(project.Id == user.DssProjectId)">@project.Code</option> }</select><button class="text-button" type="submit">Update project</button></form>
+                    }
+                    <form method="post" asp-page-handler="ToggleUser"><input type="hidden" name="id" value="@user.Id" /><button class="text-button" type="submit" aria-label="@(user.Active ? $"Revoke {user.Username}" : $"Activate {user.Username}")">@(user.Active ? "Revoke" : "Activate")</button></form>
+                    <form method="post" asp-page-handler="ResetPassword"><input type="hidden" name="id" value="@user.Id" /><button class="text-button" type="submit" aria-label="Reset password for @user.Username">Reset password</button></form>
+                }
             </div>
         }
         </div>
+    </section>
+
+    <section class="admin-section">
+        <div class="section-title"><h2>Integration settings</h2><span class="status-text">@Model.Connections.Count connections</span></div>
+        <p class="helper-text">API addresses and access certificates connect this tool to the existing supplier service.</p>
+        <details class="config-editor integration-settings" open="@(Model.SubmittedForm == "SaveConnection")">
+            <summary><span>Connection settings</span><small>@Model.Connections.Count(x => x.Active) enabled · administrator setup</small></summary>
+        <p class="helper-text">Set up each environment once. Saving a connection changes how this tool calls the supplier API.</p>
+        <details class="config-editor" open="@(Model.SubmittedForm == "SaveConnection" && Model.ConnectionInput.Id == 0)">
+            <summary>Add connection</summary>
+            <partial name="_ConnectionForm" model="Model.ConnectionEditorFor()" />
+        </details>
+        @foreach (var connection in Model.Connections)
+        {
+            <details class="config-editor" open="@(Model.SubmittedForm == "SaveConnection" && Model.ConnectionInput.Id == connection.Id)">
+                <summary><span>@connection.Name</span><small>@(Model.IsDss ? (connection.EnvironmentName == "production" ? "Production" : "Development") : AdminModel.EnvironmentLabel(connection.EnvironmentName)) @if (Model.IsDss) { <span>· @connection.Project?.Code</span> } · @Model.ConnectionState(connection)</small></summary>
+                <partial name="_ConnectionForm" model="Model.ConnectionEditorFor(connection)" />
+            </details>
+        }
+        @if (Model.Connections.Count == 0) { <p class="helper-text">No connections registered. Save incomplete configurations as disabled.</p> }
+        </details>
+        @if (Model.IsDss)
+        {
+            <p class="helper-text">The API can read a known key, sign and verify. It does not list projects or keys. Register each exact key name, then refresh its supplier details.</p>
+        }
+    </section>
+
+    @if (!Model.IsDss)
+    {
+        <section class="admin-section">
+            <div class="section-title"><h2>Certificate templates</h2><span class="status-text">@PkiRoleCatalog.All.Count diagnostic roles</span></div>
+            <p class="helper-text">Each role has a mapping for Development and Production / field. @Model.Templates.Count(x => x.Active) mappings are enabled.</p>
+            <details class="config-editor" open="@(Model.SubmittedForm == "SaveTemplate" && Model.TemplateInput.Id == 0)">
+                <summary>Add template mapping</summary>
+                <partial name="_TemplateForm" model="Model.TemplateEditorFor()" />
+            </details>
+            @foreach (var environment in new[] { "development", "production" })
+            {
+                var templates = Model.Templates.Where(x => x.EnvironmentName == environment).ToList();
+                <details class="config-editor" open="@(Model.SubmittedForm == "SaveTemplate" && Model.TemplateInput.EnvironmentName == environment)">
+                    <summary><span>@AdminModel.EnvironmentLabel(environment)</span><small>@templates.Count templates · @templates.Count(x => x.Active) enabled</small></summary>
+                    @foreach (var template in templates)
+                    {
+                        <details class="config-editor" open="@(Model.SubmittedForm == "SaveTemplate" && Model.TemplateInput.Id == template.Id)">
+                            <summary><span>@template.DisplayName</span><small>@AdminModel.TemplateState(template)</small></summary>
+                            <partial name="_TemplateForm" model="Model.TemplateEditorFor(template)" />
+                        </details>
+                    }
+                </details>
+            }
+        </section>
+        <section class="admin-section">
+            <div class="section-title"><h2>Certificate roles</h2><span class="status-text">11 available roles</span></div>
+            <p class="helper-text">ECU Variant ID identifies the ECU variant and customer. The diagnostic role sets its diagnostic permissions. Both are required in every user certificate.</p>
+            <p class="helper-text">ECU Unique ID identifies one physical ECU. It is required for Development and Claims, and optional for the other roles.</p>
+            <div class="admin-list">
+            @foreach (var role in PkiRoleCatalog.All)
+            {
+                <div class="admin-row"><div><strong>@role.Name</strong><small>0x@(role.Hex) · @role.ValidityDays days · @(role.RequiresUniqueId ? "Unique ID required" : "Unique ID optional")</small></div></div>
+            }
+            </div>
+            <p class="helper-text">OEM Claims is reserved and is not enabled.</p>
+        </section>
     }
-</section>
+    else
+    {
+        <section class="admin-section">
+            <div class="section-title"><h2>Project access</h2><span class="status-text">@Model.Projects.Count projects</span></div>
+            <p class="helper-text">Group tool accounts and registered signing keys by project. Ordinary users can sign only with their assigned project's keys; administrators can access all projects.</p>
+            <details class="config-editor" open="@(Model.SubmittedForm == "SaveProject" && Model.ProjectInput.Id == 0)">
+                <summary>Add access group</summary>
+                <partial name="_ProjectForm" model="Model.ProjectFormFor()" />
+            </details>
+            @foreach (var project in Model.Projects)
+            {
+                <details class="config-editor" open="@(Model.SubmittedForm == "SaveProject" && Model.ProjectInput.Id == project.Id)">
+                    <summary><span>@project.Code · @project.DisplayName</span><small>@(project.Active ? "Active" : "Disabled") · @project.Keys.Count registered keys</small></summary>
+                    <partial name="_ProjectForm" model="Model.ProjectFormFor(project)" />
+                </details>
+            }
+            <p class="helper-text">These groups control access within this tool. Supplier projects and keys remain managed in the supplier system.</p>
+        </section>
+        <section class="admin-section">
+            <div class="section-title"><h2>Signing keys</h2><span class="status-text">@Model.Projects.Sum(x => x.Keys.Count) registered</span></div>
+            <p class="helper-text">Register an existing supplier key for a project and environment. Refresh reads its algorithm, public key and status from the supplier.</p>
+            <details class="config-editor" open="@(Model.SubmittedForm == "SaveKey" && Model.KeyInput.Id == 0)">
+                <summary>Register signing key</summary>
+                <partial name="_KeyForm" model="Model.KeyEditorFor()" />
+            </details>
+            @foreach (var project in Model.Projects)
+            {
+                @foreach (var key in project.Keys.OrderBy(x => x.EnvironmentName).ThenBy(x => x.Name))
+                {
+                    <details class="config-editor" open="@((Model.SubmittedForm == "SaveKey" && Model.KeyInput.Id == key.Id) || (Model.SubmittedForm == "RefreshKey" && Model.RefreshKeyId == key.Id))">
+                        <summary><span>@key.Name</span><small>@project.Code · @(key.EnvironmentName == "production" ? "Production" : "Development") · @AdminModel.KeyState(key)</small></summary>
+                        <div class="supplier-key-details">
+                            <p class="helper-text">@AdminModel.SupplierKeySummary(key)</p>
+                            <form method="post" asp-page-handler="RefreshKey"><input type="hidden" name="id" value="@key.Id" /><button class="secondary-button" type="submit" disabled="@(!Model.CanRefreshKey(key))">Refresh from supplier</button></form>
+                            @if (!Model.CanRefreshKey(key)) { <p class="helper-text">Complete and enable the DSS connection to refresh supplier details.</p> }
+                        </div>
+                        <partial name="_KeyForm" model="Model.KeyEditorFor(key)" />
+                    </details>
+                }
+            }
+        </section>
+    }
 </div>

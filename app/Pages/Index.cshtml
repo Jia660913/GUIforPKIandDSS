@@ -1,15 +1,32 @@
 @page
 @model IndexModel
-@{ ViewData["Title"] = "选择工具"; }
-<section class="landing-grid">
-    <div class="intro-block">
-        <div class="eyebrow">ENGINEERING TOOL DESK</div>
-        <h1>把复杂的供应商系统，<br /><em>变成清晰的工程动作。</em></h1>
-        <p class="lede">独立账号、项目边界和完整记录。选择你今天要使用的工具。</p>
-        <div class="trust-row"><span class="status-dot"></span><span>本地安全工作区</span><span class="dot-divider">·</span><span>供应商接口凭据仅在服务端使用</span></div>
+@{ ViewData["Title"] = "Select a tool"; ViewData["PageClass"] = "landing-page"; }
+<section class="tool-directory" aria-labelledby="directory-title">
+    <div class="directory-head">
+        <h1 id="directory-title">Select a tool</h1>
+        <p>Certificates and digital signatures.</p>
     </div>
     <div class="tool-selector">
-        <a class="tool-card pki" asp-page="/Login" asp-route-module="Pki"><div class="tool-icon">PKI</div><div><span class="tool-kicker">CERTIFICATE SERVICE</span><h2>PKI 证书工具</h2><p>申请三级诊断证书，生成或上传 CSR，选择开发与量产环境。</p><span class="card-action">进入 PKI <span>↗</span></span></div></a>
-        <a class="tool-card dss" asp-page="/Login" asp-route-module="Dss"><div class="tool-icon">DSS</div><div><span class="tool-kicker">SIGNING SERVICE</span><h2>DSS 签名工具</h2><p>按项目选择密钥，为摘要或字符串生成独立签名值。</p><span class="card-action">进入 DSS <span>↗</span></span></div></a>
+        <a class="tool-card pki" asp-page="/Login" asp-route-module="Pki">
+            <div class="tool-card-top">
+                <span class="tool-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M19 5H8a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h9M19 5l7 7M19 5v7h7v6M11 11h3m-3 5h9m-9 5h5"/><circle cx="24" cy="23" r="4"/><path d="m21 26-1 5 4-2 4 2-1-5"/></svg></span>
+                <span class="module-name">PKI</span>
+            </div>
+            <h2>Certificates</h2>
+            <p>Request a diagnostic user certificate.</p>
+            <dl class="tool-specs"><div><dt>Input</dt><dd>CSR or certificate details</dd></div><div><dt>Output</dt><dd>X.509 certificate</dd></div></dl>
+            <span class="card-action">Open PKI <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5"/></svg></span>
+        </a>
+        <a class="tool-card dss" asp-page="/Login" asp-route-module="Dss">
+            <div class="tool-card-top">
+                <span class="tool-icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="m7 22 1-6L22 2a2.8 2.8 0 0 1 4 4L12 20l-5 2Zm12-17 4 4M5 28h22M17 22h10"/></svg></span>
+                <span class="module-name">DSS</span>
+            </div>
+            <h2>Digital signatures</h2>
+            <p>Sign a digest or text with your project key.</p>
+            <dl class="tool-specs"><div><dt>Input</dt><dd>Hash or UTF-8 text</dd></div><div><dt>Output</dt><dd>Independent signature</dd></div></dl>
+            <span class="card-action">Open DSS <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 10h12m-5-5 5 5-5 5"/></svg></span>
+        </a>
     </div>
+    <p class="directory-note">Sign in with the account assigned to each tool.</p>
 </section>

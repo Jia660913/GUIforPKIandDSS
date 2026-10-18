@@ -1,6 +1,34 @@
 @page
 @model HistoryModel
-@{ ViewData["Title"] = "操作记录"; }
-<div class="section-head"><div><div class="eyebrow">AUDIT TRAIL / 365 DAYS</div><h1>操作记录</h1><p class="lede">@(Model.IsAdmin ? "管理员视图：查看本工具全部申请与签名记录。" : "你的历史操作只对你自己可见。")</p></div><div class="head-meta">保留至 @DateTime.UtcNow.AddYears(1).ToLocalTime().ToString("yyyy-MM-dd")</div></div>
-<div class="history-tabs"><span class="active">全部操作</span><span>@Model.Items.Count 条记录</span></div>
-<div class="record-table"><div class="record-row record-header"><span>时间</span><span>类型</span><span>输入 / 模板</span><span>结果</span><span>操作者</span></div>@if (Model.Items.Count == 0) { <div class="empty-row">暂无记录</div> } @foreach (var item in Model.Items) { <div class="record-row"><span class="mono">@item.When.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</span><span><b class="record-kind @item.Kind.ToLowerInvariant()">@item.Kind</b></span><span><strong>@item.Subject</strong><small>@item.Detail</small></span><span class="@(item.Success ? "result-ok" : "result-fail")">@(item.Success ? "成功" : "失败")</span><span>@item.User</span></div> }</div>
+@{ ViewData["Title"] = "History"; }
+<div class="section-head"><div><h1>Operation history</h1><p class="lede">@(Model.IsAdmin ? "All activity in this tool." : "Your certificate requests and signing activity.")</p></div><div class="head-meta">Retained for one year</div></div>
+<div class="history-tabs"><span class="active">All operations</span><span>@Model.TotalCount records · Page @Model.PageNumber of @Model.PageCount</span></div>
+<div class="record-table" role="table" aria-label="Operation history">
+    <div class="record-row record-header" role="row"><span role="columnheader">Time (UTC)</span><span role="columnheader">Tool</span><span role="columnheader">Input / template</span><span role="columnheader">Result</span><span role="columnheader">User</span></div>
+    @if (Model.Items.Count == 0) { <div class="empty-row">No operations yet.</div> }
+    @foreach (var item in Model.Items)
+    {
+        <div class="record-row" role="row"><span class="mono" role="cell">@item.When.ToString("yyyy-MM-dd HH:mm")</span><span role="cell"><b class="record-kind @item.Kind.ToLowerInvariant()">@item.Kind</b></span><span role="cell"><a asp-page="/History/Index" asp-route-DetailId="@item.Id" asp-route-PageNumber="@Model.PageNumber"><strong>@item.Subject</strong></a><small>@item.Detail</small></span><span role="cell" class="@(item.Status == "succeeded" ? "result-ok" : "result-pending")">@HistoryModel.StatusLabel(item.Status)</span><span role="cell">@item.User</span></div>
+    }
+</div>
+<nav class="pagination" aria-label="History pages">
+    @if (Model.PageNumber > 1) { <a class="secondary-button" asp-route-PageNumber="@(Model.PageNumber - 1)">Previous</a> }
+    <span>Page @Model.PageNumber of @Model.PageCount</span>
+    @if (Model.PageNumber < Model.PageCount) { <a class="secondary-button" asp-route-PageNumber="@(Model.PageNumber + 1)">Next</a> }
+</nav>
+@if (Model.Selected is not null)
+{
+    var record = Model.Selected;
+    <section class="result-panel history-detail" aria-label="Operation details">
+        <div class="section-title"><h2>Operation #@record.Id</h2><span>@HistoryModel.StatusLabel(record.Status)</span></div>
+        @if (record.Status == "unknown") { <p class="validation">The supplier may have completed this operation. Check its request record before submitting again.</p> }
+        @if (record.Status == "legacy") { <p class="notice">This record predates result verification. Its original result is preserved.</p> }
+        <dl class="detail-grid">@foreach (var field in record.Fields.Where(x => !string.IsNullOrEmpty(x.Value))) { <div><dt>@field.Key</dt><dd>@field.Value</dd></div> }</dl>
+        @if (record.Input is not null) { <label for="record-input">Original input</label><textarea id="record-input" readonly rows="5">@record.Input</textarea><a class="secondary-button" asp-page-handler="Download" asp-route-id="@record.Id" asp-route-kind="input">Download input</a> }
+        @if (!string.IsNullOrWhiteSpace(record.Result))
+        {
+            <label for="record-result">@(record.Kind == "PKI" ? "Certificate result" : "Signature result")</label><textarea id="record-result" readonly rows="6">@record.Result</textarea>
+            @if (record.Status == "succeeded") { <a class="secondary-button" asp-page-handler="Download" asp-route-id="@record.Id" asp-route-kind="@(record.Kind == "PKI" ? "certificate" : "signature")">Download result</a> }
+        }
+    </section>
+}
